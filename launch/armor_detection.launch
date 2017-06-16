@@ -1,9 +1,6 @@
 <launch>
-	<arg name="namespace" default="front_cam"/>
 	<arg name="color" default="blue"/>
 	<arg name="debug" default="true"/>
-
-	<group ns="$(arg namespace)">
 		<node
 			pkg="base_vision"
 			type="armor_detection"
@@ -17,5 +14,4 @@
 		<param name="published_topic" value="roi"/>
 
 		</node>
-	</group>
 </launch>

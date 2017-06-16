@@ -147,7 +147,7 @@ void detect_armor()
       // cout << "xcenter " << fabs(rect1.center.x - rect2.center.x) << endl;
       if((fabs(rect1.center.y - rect2.center.y) > LED_length/2.0)||(fabs(rect1.center.x - rect2.center.x) > 5.0*LED_length)) continue;
       armor_found(contour_index[i], contour_index[j], LED_length);
-      ROS_INFO("Found %d %d %f", i, j, LED_length);
+      // ROS_INFO("Found %d %d %f", i, j, LED_length);
       // cv::line(dst, contour_rrect[i].center, contour_rrect[j].center, Scalar(255,255,255),20);
       if(contour_index.size() <= 2)
       {
