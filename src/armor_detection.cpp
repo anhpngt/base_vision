@@ -37,11 +37,12 @@ cv_bridge::CvImagePtr cv_ptr;
 //ROS var
 vector<sensor_msgs::RegionOfInterest> object;
 //OpenCV image processing method dependent vars 
-std::vector<std::vector<cv::Point> > contours;
+std::vector<std::vector<cv::Point> > contours, circle_contours;
 std::vector<cv::Vec4i> hierarchy;
-std::vector<int> contour_index;
-cv::Mat src, croppedRef, cropped, hsv, dst, dst_bgr;
+std::vector<int> contour_index, circle_contours_index;
+cv::Mat src, croppedRef, cropped, hsv, dst, /*dst_bgr,*/ black, bin;
 cv::Scalar up_lim, low_lim, up_lim_wrap, low_lim_wrap;
+cv::Scalar low_black, up_black;
 cv::Mat lower_hue_range, upper_hue_range;
 cv::Mat str_el = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3));
 cv::Rect rect;
@@ -85,7 +86,8 @@ void armor_found(int a, int b, float LED_length)
 
 void detect_armor()
 {
-  //Filter desired color
+  //*********************************
+  //Filter desired color (color = indicated in the launch file)
   if(armor_color == "red")
   {//In case of red color
     cv::inRange(hsv, low_lim, up_lim, lower_hue_range);
@@ -93,7 +95,7 @@ void detect_armor()
     cv::addWeighted(lower_hue_range,1.0,upper_hue_range,1.0,0.0,dst);
   }
   else cv::inRange(hsv, low_lim, up_lim, dst);
-  cv::imshow("bin", dst);
+  bin = dst;
   //Reduce noise
   reduce_noise(&dst);
   //Finding shapes
@@ -121,12 +123,44 @@ void detect_armor()
       if(debug) cv::drawContours(dst, contours, i, Scalar(0,0,0),-1);
       continue;
     }
-    //If contour is good, register the contour for further processing
+    //If contour is good, save the contour for further processing
     contour_index.push_back(i);
   }
   if(contour_index.empty()) return;
+  //*********************************
+  //Filter the numbering circle (color = black)
+  cv::inRange(hsv, low_black, up_black, dst);
+  cv::addWeighted(bin, 1.0, dst, 1.0, 0.0, bin);
+  //Reduce noise
+  reduce_noise(&dst);
+  //Finding shapes
+  cv::findContours(dst.clone(), circle_contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
+  //Detect shape for each contour
+  for(int i = 0; i < circle_contours.size(); i++)
+  {
+    //Skip small objects
+    area = cv::contourArea(circle_contours[i]);
+    if(area < min_area) continue;
+
+    rect = cv::boundingRect(circle_contours[i]);
+    mr = cv::minAreaRect(circle_contours[i]);
+    mr_area = (mr.size).height*(mr.size).width;
+
+    vector<Point> hull;
+    convexHull(circle_contours[i], hull, 0, 1);
+    double hull_area = contourArea(hull);
+
+    if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05))
+    {//Circle found
+      cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
+      cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 1);
+      //Save the circle for further processing
+      circle_contours_index.push_back(i);
+    }
+  }
+  //*********************************
   //Final process
-  cv::cvtColor(dst,dst_bgr,COLOR_GRAY2BGR);
+  // cv::cvtColor(dst,dst_bgr,COLOR_GRAY2BGR);
   for(int i = 0; i < contour_index.size()-1; i++)
     for(int j = i+1; j < contour_index.size(); j++)
     {
@@ -136,7 +170,8 @@ void detect_armor()
       // cout << rect1.center << " and " << rect2.center << endl;
       //Check angles of 2 LEDs
       // cout << "angle = " << fabs(rect1.angle - rect2.angle) << " =>>> " << (fabs(rect1.angle - rect2.angle) > 8.0) << endl;
-      if(fabs(rect1.angle - rect2.angle) > 5.0) continue;
+      //***Note: since there is a circle between the LEDs as an indicator, angle checking is no longer really needed
+      //if(fabs(rect1.angle - rect2.angle) > 5.0) continue;
       //Check sizes of 2 LEDs
       // cout << "sizes are: " << max(rect1.size.height, rect1.size.width) << " and " << max(rect2.size.height, rect2.size.width) << endl;
       // cout << "=>>> " << (fabs(max(rect1.size.height, rect1.size.width)/max(rect2.size.height, rect2.size.width) - 1) > 0.15) << endl;
@@ -160,6 +195,7 @@ void detect_armor()
       j=j-2;
     }
   contour_index.clear();
+  circle_contours_index.clear();
   return;
 }
 
@@ -196,12 +232,15 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg)
   {
     cv::imshow("src", src);
     cv::imshow("dst", dst);
+    cv::imshow("bin", bin);
   }
 }
 
 void dynamic_configCb(base_vision::armor_colorConfig &config, uint32_t level) 
 {
   min_area = config.min_area;
+  low_black = cv::Scalar(config.black_H_low, config.black_S_low, config.black_V_low);
+  up_black = cv::Scalar(config.black_H_high, config.black_S_high, config.black_V_high);
   //Process appropriate parameter for armor color
   if(armor_color == "blue") 
   {
@@ -240,10 +279,13 @@ int main(int argc, char** argv)
     cv::namedWindow("src",WINDOW_AUTOSIZE);*/
     cv::namedWindow("bin",WINDOW_NORMAL);
     cv::resizeWindow("bin",640,480);
+    cv::moveWindow("bin", 800, 0);
     cv::namedWindow("dst",WINDOW_NORMAL);
     cv::resizeWindow("dst",640,480);
+    cv::moveWindow("red", 0, 600);
     cv::namedWindow("src",WINDOW_NORMAL);
     cv::resizeWindow("src",640,480);
+    cv::moveWindow("src", 0, 0);
     cv::startWindowThread();
   }
   //Start ROS subscriber...
