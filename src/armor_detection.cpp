@@ -72,7 +72,7 @@ void armor_found(int a, int b, float LED_length)
   }
   float x_offset = (recta.tl().x);
     obj.x_offset = x_offset;
-  float y_offset = ((recta.tl().y + rectb.tl().y)/2.0 - LED_length + height/4); //note that the cropping makes change to the coordinate, which explains the height/4 component
+  float y_offset = ((recta.tl().y + rectb.tl().y)/2.0 - LED_length /*+ height/4*/); //note that the cropping makes change to the coordinate, which explains the height/4 component
     obj.y_offset = y_offset;
   float armor_height = 3*LED_length;
     obj.height = armor_height;
@@ -95,9 +95,9 @@ void detect_armor()
     cv::addWeighted(lower_hue_range,1.0,upper_hue_range,1.0,0.0,dst);
   }
   else cv::inRange(hsv, low_lim, up_lim, dst);
-  bin = dst;
   //Reduce noise
   reduce_noise(&dst);
+  if(debug) cv::imshow("LEDs", dst);
   //Finding shapes
   cv::findContours(dst.clone(), contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
   //Detect shape for each contour
@@ -130,7 +130,6 @@ void detect_armor()
   //*********************************
   //Filter the numbering circle (color = black)
   cv::inRange(hsv, low_black, up_black, dst);
-  cv::addWeighted(bin, 1.0, dst, 1.0, 0.0, bin);
   //Reduce noise
   reduce_noise(&dst);
   //Finding shapes
@@ -150,14 +149,16 @@ void detect_armor()
     convexHull(circle_contours[i], hull, 0, 1);
     double hull_area = contourArea(hull);
 
-    if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05))
+    if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05) 
+        && (std::fabs((float)rect.height/rect.width - 1) < 0.7))
     {//Circle found
       cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
-      cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 1);
+      cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
       //Save the circle for further processing
       circle_contours_index.push_back(i);
     }
   }
+  if(debug) cv::imshow("black", dst);
   //*********************************
   //Final process
   // cv::cvtColor(dst,dst_bgr,COLOR_GRAY2BGR);
@@ -168,19 +169,34 @@ void detect_armor()
       cv::RotatedRect rect1 = cv::minAreaRect(contours[contour_index[i]]);
       cv::RotatedRect rect2 = cv::minAreaRect(contours[contour_index[j]]);
       // cout << rect1.center << " and " << rect2.center << endl;
+
       //Check angles of 2 LEDs
-      // cout << "angle = " << fabs(rect1.angle - rect2.angle) << " =>>> " << (fabs(rect1.angle - rect2.angle) > 8.0) << endl;
       //***Note: since there is a circle between the LEDs as an indicator, angle checking is no longer really needed
+      // cout << "angle = " << fabs(rect1.angle - rect2.angle) << " =>>> " << (fabs(rect1.angle - rect2.angle) > 8.0) << endl;
       //if(fabs(rect1.angle - rect2.angle) > 5.0) continue;
+
       //Check sizes of 2 LEDs
       // cout << "sizes are: " << max(rect1.size.height, rect1.size.width) << " and " << max(rect2.size.height, rect2.size.width) << endl;
       // cout << "=>>> " << (fabs(max(rect1.size.height, rect1.size.width)/max(rect2.size.height, rect2.size.width) - 1) > 0.15) << endl;
       if(fabs(max(rect1.size.height, rect1.size.width)/max(rect2.size.height, rect2.size.width) - 1.0) > 0.2) continue;
+
       //Check distance between 2 LEDs
       float LED_length = max(rect1.size.height, rect1.size.width);
       // cout << "ycenter " << fabs(rect1.center.y - rect2.center.y) << endl;
       // cout << "xcenter " << fabs(rect1.center.x - rect2.center.x) << endl;
       if((fabs(rect1.center.y - rect2.center.y) > LED_length/2.0)||(fabs(rect1.center.x - rect2.center.x) > 5.0*LED_length)) continue;
+
+      //Check if there is a circle between the LEDs
+      bool circle_check = false;
+      for(int k = 0; k < circle_contours_index.size(); k++)
+        if(cv::pointPolygonTest(circle_contours[k], (rect1.center + rect2.center)*0.5, false) > 1)
+        {
+          circle_check = true;
+          circle_contours_index.erase(circle_contours_index.begin()+k);
+        }
+      if(circle_check = false) continue;
+
+      //Finished checking, armor confirmed
       armor_found(contour_index[i], contour_index[j], LED_length);
       // ROS_INFO("Found %d %d %f", i, j, LED_length);
       // cv::line(dst, contour_rrect[i].center, contour_rrect[j].center, Scalar(255,255,255),20);
@@ -189,10 +205,10 @@ void detect_armor()
         contour_index.clear();
         return;
       }
-      contour_index.erase(contour_index.begin()+j);
-      contour_index.erase(contour_index.begin()+i);
-      // if(contour_index.empty()) return;
-      j=j-2;
+      // contour_index.erase(contour_index.begin()+j);
+      // contour_index.erase(contour_index.begin()+i);
+      // // if(contour_index.empty()) return;
+      // j=j-2;
     }
   contour_index.clear();
   circle_contours_index.clear();
@@ -220,19 +236,17 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg)
   width = src.cols;
   height = src.rows;
   //Crop image, note that this doesnt copy the data
-  croppedRef = src(cv::Rect(0, height/4, width, 3*height/4));
-  croppedRef.copyTo(cropped);
+  // croppedRef = src(cv::Rect(0, height/4, width, 3*height/4));
+  // croppedRef.copyTo(cropped); //change src to crop below to crop the image b4 processing
   //Start the shape detection code
-  cv::blur(cropped,cropped,Size(1,1));
-  cv::cvtColor(cropped,hsv,COLOR_BGR2HSV);
+  cv::blur(src,src,Size(1,1));
+  cv::cvtColor(src,hsv,COLOR_BGR2HSV);
   //Detect stuffs
   detect_armor();
   //Show output on screen in debug mode
   if(debug) 
   {
     cv::imshow("src", src);
-    cv::imshow("dst", dst);
-    cv::imshow("bin", bin);
   }
 }
 
@@ -277,12 +291,12 @@ int main(int argc, char** argv)
   {
    /* cv::namedWindow("color",WINDOW_AUTOSIZE);
     cv::namedWindow("src",WINDOW_AUTOSIZE);*/
-    cv::namedWindow("bin",WINDOW_NORMAL);
-    cv::resizeWindow("bin",640,480);
-    cv::moveWindow("bin", 800, 0);
-    cv::namedWindow("dst",WINDOW_NORMAL);
-    cv::resizeWindow("dst",640,480);
-    cv::moveWindow("red", 0, 600);
+    cv::namedWindow("black",WINDOW_NORMAL);
+    cv::resizeWindow("black",640,480);
+    cv::moveWindow("black", 800, 0);
+    cv::namedWindow("LEDs",WINDOW_NORMAL);
+    cv::resizeWindow("LEDs",640,480);
+    cv::moveWindow("LEDs", 0, 600);
     cv::namedWindow("src",WINDOW_NORMAL);
     cv::resizeWindow("src",640,480);
     cv::moveWindow("src", 0, 0);
