@@ -1,12 +1,10 @@
-<?xml version="1.0" ?>
-<!--use command: [v4l2-ctl - -all] to shown the default values of the cameras-->
 <launch>
-    <arg name="video_device" default="/dev/video0" />
+    <arg name="video_device" default="/dev/video1" />
     <arg name="camera_frame_id" default="camera_link" />
     <!--arg name="namespace" default="front_cam" /-->
     <arg name="camera_info" default="camera_info" />
     <arg name="camera_image_raw" default="image_raw" />
-    <arg name="camera_model" default="logitech_c922" />
+    <arg name="camera_model" default="logitech_c920" />
     <arg name="debug" default="false" />
 
 
@@ -18,8 +16,8 @@
             <remap from="usb_cam/camera_info" to="$(arg camera_info)" />
 
             <param name="video_device" value="$(arg video_device)" />
-            <param name="image_width" value="640" />
-            <param name="image_height" value="480" />
+            <param name="image_width" value="1024" />
+            <param name="image_height" value="576" />
             <param name="framerate" value="30" />
             <!--param name="contrast" value="128"/>
             <param name="brightness" value="128" />
