@@ -44,7 +44,7 @@ cv::Mat str_el = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3));
 cv::Rect rect;
 cv::RotatedRect mr;
 int height, width;
-int min_area = 300;
+int min_area = 500;
 double area, r_area, mr_area;
 const double eps = 0.15;
 
@@ -77,11 +77,12 @@ void detect_symbol()
   //Filter desired color
   //********************
   //In case of red color
-  cv::inRange(hsv, cv::Scalar(0, 20, 160), cv::Scalar(30, 255, 255), lower_hue_range);
-  cv::inRange(hsv, cv::Scalar(178, 20, 160), cv::Scalar(179, 255, 255), upper_hue_range);
+  cv::inRange(hsv, cv::Scalar(0, 20, 130), cv::Scalar(30, 255, 255), lower_hue_range);
+  cv::inRange(hsv, cv::Scalar(178, 20, 130), cv::Scalar(179, 255, 255), upper_hue_range);
   cv::addWeighted(lower_hue_range,1.0,upper_hue_range,1.0,0.0,color);
   //Reduce noise
   reduce_noise(&color);
+  if(debug) cv::imshow("red", color);
   //Finding shapes
   cv::findContours(color.clone(), contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
   //Detect shape for each contour
@@ -117,15 +118,16 @@ void detect_symbol()
       minEnclosingCircle(hull, hull_center, hull_radius);
       double cir_area = 3.1416*radius*radius;
       double hull_cir_area = 3.1416*hull_radius*hull_radius;
-      double eps = (2 - fabs(area/cir_area - 0.5) - fabs(hull_area/hull_cir_area - 0.8))/2-1;
+      double eps = (2 - fabs(area/cir_area - 0.4) - fabs(hull_area/hull_cir_area - 0.7))/2-1;
       if(fabs(eps) <= 0.1)
         object_found();
     }
   }
   //********************
   //In case of blue color
-  cv::inRange(hsv, cv::Scalar(0, 0, 230), cv::Scalar(179, 255, 255), lower_hue_range);
+  cv::inRange(hsv, cv::Scalar(100, 100, 100), cv::Scalar(120, 230, 230), color);
   reduce_noise(&color);
+  if(debug) cv::imshow("blue", color);
   //Finding shapes
   cv::findContours(color.clone(), contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
   //Detect shape for each contour
@@ -161,7 +163,13 @@ void detect_symbol()
       minEnclosingCircle(hull, hull_center, hull_radius);
       double cir_area = 3.1416*radius*radius;
       double hull_cir_area = 3.1416*hull_radius*hull_radius;
-      double eps = (2 - fabs(area/cir_area - 0.5) - fabs(hull_area/hull_cir_area - 0.8))/2-1;
+      double eps = (2 - fabs(area/cir_area - 0.4) - fabs(hull_area/hull_cir_area - 0.7))/2-1;
+      // cout << endl << "Shape " << i << endl;
+      // cout << eps << endl;
+      // cout << area/cir_area << endl;
+      // cout << cir_area << endl;
+      // cout << hull_area/hull_cir_area << endl;
+      // cout << hull_cir_area << endl << endl;
       if(fabs(eps) <= 0.1)
         object_found();
     }
@@ -190,11 +198,7 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg)
   //Detect stuffs
   detect_symbol();
   //Show output on screen in debug mode
-  if(debug) 
-  {
-    cv::imshow("src", src);
-    cv::imshow("color", color);
-  }
+  if(debug) cv::imshow("src", src);
 }
 
 int main(int argc, char** argv)
@@ -211,9 +215,12 @@ int main(int argc, char** argv)
   {
    /* cv::namedWindow("color",WINDOW_AUTOSIZE);
     cv::namedWindow("src",WINDOW_AUTOSIZE);*/
-    cv::namedWindow("color",WINDOW_NORMAL);
-    cv::resizeWindow("color",640,480);
-    cv::moveWindow("color", 0, 600);
+    cv::namedWindow("red",WINDOW_NORMAL);
+    cv::resizeWindow("red",640,480);
+    cv::moveWindow("red", 0, 600);
+    cv::namedWindow("blue",WINDOW_NORMAL);
+    cv::resizeWindow("blue",640,480);
+    cv::moveWindow("blue", 700, 0);
     cv::namedWindow("src",WINDOW_NORMAL);
     cv::resizeWindow("src",640,480);
     cv::moveWindow("src", 0, 0);
