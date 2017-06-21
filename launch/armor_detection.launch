@@ -1,5 +1,5 @@
 <launch>
-	<arg name="color" default="blue"/>
+	<arg name="color" default="red"/>
 	<arg name="debug" default="true"/>
 		<node
 			pkg="base_vision"
