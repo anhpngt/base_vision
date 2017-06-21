@@ -1,3 +1,6 @@
+**New updates on 21-Jun-2017.
+
+
 Adding package into workspace:
 
 
@@ -12,6 +15,22 @@ Adding package into workspace:
 	cd ~/catkin_ws
 
 	catkin_make
+
+
+Running the armor detection node:
+
+
+	roslaunch base_vision armor_detection.launch (the default color of LEDs is blue)
+
+or
+
+	roslaunch base_vision armor_detection.lanch color:=red
+
+
+Running the object detection for UAV: (detects cross/circle in red/blue color)
+
+
+	roslaunch base_vision cross.launch
 
 
 Running the red ball targetting node:

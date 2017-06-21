@@ -168,3 +168,7 @@ target_link_libraries(arrow ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 add_executable(target src/target.cpp)
 add_dependencies(target ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
 target_link_libraries(target ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+
+add_executable(cross src/cross.cpp)
+add_dependencies(cross ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
+target_link_libraries(cross ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
