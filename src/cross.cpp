@@ -78,8 +78,8 @@ void detect_symbol()
   //Filter desired color
   //********************
   //In case of red color
-  cv::inRange(hsv, cv::Scalar(0, 20, 130), cv::Scalar(30, 255, 255), lower_hue_range);
-  cv::inRange(hsv, cv::Scalar(178, 20, 130), cv::Scalar(179, 255, 255), upper_hue_range);
+  cv::inRange(hsv, cv::Scalar(0, 100, 70), cv::Scalar(25, 255, 255), lower_hue_range);
+  cv::inRange(hsv, cv::Scalar(163, 100, 70), cv::Scalar(179, 255, 255), upper_hue_range);
   cv::addWeighted(lower_hue_range,1.0,upper_hue_range,1.0,0.0,color);
   //Reduce noise
   reduce_noise(&color);
