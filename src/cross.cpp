@@ -103,25 +103,26 @@ void detect_symbol()
 
     //Circle detection
     if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05)
-                                                    && (std::fabs((float)rect.height/rect.width - 1) < 0.7))
+                                                    && (std::fabs((float)rect.height/rect.width - 1) < 0.7)
+                                                    && (hierarchy[i][2] != -1))
     {
       object_found();
-      continue;
+      // continue;
     }
-    //Cross
-    {
-      Point2f center(contours[i].size());
-      float radius(contours[i].size());
-      Point2f hull_center(hull.size());
-      float hull_radius(hull.size());
-      minEnclosingCircle(contours[i], center, radius);
-      minEnclosingCircle(hull, hull_center, hull_radius);
-      double cir_area = 3.1416*radius*radius;
-      double hull_cir_area = 3.1416*hull_radius*hull_radius;
-      double eps = (2 - fabs(area/cir_area - 0.4) - fabs(hull_area/hull_cir_area - 0.7))/2-1;
-      if(fabs(eps) <= 0.1)
-        object_found();
-    }
+    // //Cross
+    // {
+    //   Point2f center(contours[i].size());
+    //   float radius(contours[i].size());
+    //   Point2f hull_center(hull.size());
+    //   float hull_radius(hull.size());
+    //   minEnclosingCircle(contours[i], center, radius);
+    //   minEnclosingCircle(hull, hull_center, hull_radius);
+    //   double cir_area = 3.1416*radius*radius;
+    //   double hull_cir_area = 3.1416*hull_radius*hull_radius;
+    //   double eps = (2 - fabs(area/cir_area - 0.4) - fabs(hull_area/hull_cir_area - 0.7))/2-1;
+    //   if(fabs(eps) <= 0.1)
+    //     object_found();
+    // }
   }
   //********************
   //In case of blue color
@@ -148,31 +149,32 @@ void detect_symbol()
 
     //Circle detection
     if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05)
-                                                    && (std::fabs((float)rect.height/rect.width - 1) < 0.7))
+                                                    && (std::fabs((float)rect.height/rect.width - 1) < 0.7)
+                                                    && (hierarchy[i][2] != -1))
     {
       object_found();
-      continue;
+      // continue;
     }
-    //Cross
-    {
-      Point2f center(contours[i].size());
-      float radius(contours[i].size());
-      Point2f hull_center(hull.size());
-      float hull_radius(hull.size());
-      minEnclosingCircle(contours[i], center, radius);
-      minEnclosingCircle(hull, hull_center, hull_radius);
-      double cir_area = 3.1416*radius*radius;
-      double hull_cir_area = 3.1416*hull_radius*hull_radius;
-      double eps = (2 - fabs(area/cir_area - 0.4) - fabs(hull_area/hull_cir_area - 0.7))/2-1;
-      // cout << endl << "Shape " << i << endl;
-      // cout << eps << endl;
-      // cout << area/cir_area << endl;
-      // cout << cir_area << endl;
-      // cout << hull_area/hull_cir_area << endl;
-      // cout << hull_cir_area << endl << endl;
-      if(fabs(eps) <= 0.1)
-        object_found();
-    }
+    // //Cross
+    // {
+    //   Point2f center(contours[i].size());
+    //   float radius(contours[i].size());
+    //   Point2f hull_center(hull.size());
+    //   float hull_radius(hull.size());
+    //   minEnclosingCircle(contours[i], center, radius);
+    //   minEnclosingCircle(hull, hull_center, hull_radius);
+    //   double cir_area = 3.1416*radius*radius;
+    //   double hull_cir_area = 3.1416*hull_radius*hull_radius;
+    //   double eps = (2 - fabs(area/cir_area - 0.4) - fabs(hull_area/hull_cir_area - 0.7))/2-1;
+    //   // cout << endl << "Shape " << i << endl;
+    //   // cout << eps << endl;
+    //   // cout << area/cir_area << endl;
+    //   // cout << cir_area << endl;
+    //   // cout << hull_area/hull_cir_area << endl;
+    //   // cout << hull_cir_area << endl << endl;
+    //   if(fabs(eps) <= 0.1)
+    //     object_found();
+    // }
   }
 }
 
