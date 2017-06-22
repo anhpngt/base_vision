@@ -31,7 +31,7 @@ bool debug;
 //Image transport vars
 cv_bridge::CvImagePtr cv_ptr;
 //ROS var
-vector<sensor_msgs::RegionOfInterest> object;
+sensor_msgs::RegionOfInterest object;
 //OpenCV image processing method dependent vars 
 std::vector<std::vector<cv::Point> > contours;
 std::vector<cv::Vec4i> hierarchy;
@@ -68,7 +68,8 @@ sensor_msgs::RegionOfInterest object_return()
 
 void object_found()
 {
-  object.push_back(object_return());         //Push the object to the vector
+  if(rect.width*rect.height > object.height*object.width)
+    object = object_return();         //Push the object to the vector
   if(debug) cv::rectangle(src, rect.tl(), rect.br()-cv::Point(1,1), cv::Scalar(0,255,255), 2, 8, 0);
 }
 
@@ -105,24 +106,7 @@ void detect_symbol()
     if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05)
                                                     && (std::fabs((float)rect.height/rect.width - 1) < 0.7)
                                                     && (hierarchy[i][2] != -1))
-    {
       object_found();
-      // continue;
-    }
-    // //Cross
-    // {
-    //   Point2f center(contours[i].size());
-    //   float radius(contours[i].size());
-    //   Point2f hull_center(hull.size());
-    //   float hull_radius(hull.size());
-    //   minEnclosingCircle(contours[i], center, radius);
-    //   minEnclosingCircle(hull, hull_center, hull_radius);
-    //   double cir_area = 3.1416*radius*radius;
-    //   double hull_cir_area = 3.1416*hull_radius*hull_radius;
-    //   double eps = (2 - fabs(area/cir_area - 0.4) - fabs(hull_area/hull_cir_area - 0.7))/2-1;
-    //   if(fabs(eps) <= 0.1)
-    //     object_found();
-    // }
   }
   //********************
   //In case of blue color
@@ -148,33 +132,10 @@ void detect_symbol()
     double hull_area = contourArea(hull);
 
     //Circle detection
-    if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05)
+    if((std::fabs(area/mr_area - 3.141593/4) < 0.08) && (std::fabs(area/hull_area - 1) < 0.04)
                                                     && (std::fabs((float)rect.height/rect.width - 1) < 0.7)
                                                     && (hierarchy[i][2] != -1))
-    {
       object_found();
-      // continue;
-    }
-    // //Cross
-    // {
-    //   Point2f center(contours[i].size());
-    //   float radius(contours[i].size());
-    //   Point2f hull_center(hull.size());
-    //   float hull_radius(hull.size());
-    //   minEnclosingCircle(contours[i], center, radius);
-    //   minEnclosingCircle(hull, hull_center, hull_radius);
-    //   double cir_area = 3.1416*radius*radius;
-    //   double hull_cir_area = 3.1416*hull_radius*hull_radius;
-    //   double eps = (2 - fabs(area/cir_area - 0.4) - fabs(hull_area/hull_cir_area - 0.7))/2-1;
-    //   // cout << endl << "Shape " << i << endl;
-    //   // cout << eps << endl;
-    //   // cout << area/cir_area << endl;
-    //   // cout << cir_area << endl;
-    //   // cout << hull_area/hull_cir_area << endl;
-    //   // cout << hull_cir_area << endl << endl;
-    //   if(fabs(eps) <= 0.1)
-    //     object_found();
-    // }
   }
 }
 
@@ -237,11 +198,7 @@ int main(int argc, char** argv)
   while (nh.ok())
   {
   	//Publish every object detected
-    for(vector<sensor_msgs::RegionOfInterest>::iterator it = object.begin(); it != object.end(); it++)
-      pub.publish(*it);
-    //Reinitialize the object counting vars
-    object.clear();
-
+    pub.publish(object);
     ros::spinOnce();
     r.sleep();
   }
