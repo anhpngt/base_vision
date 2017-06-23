@@ -1,5 +1,5 @@
 <launch>
-	<arg name="video" default="blue_robot.MKV"/>
+	<arg name="video" default="1.mp4"/>
 	<group>
 		<node
 			pkg="base_vision"
