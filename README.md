@@ -1,4 +1,4 @@
-**New updates on 21-Jun-2017.
+**New updates on 23-Jun-2017.
 
 
 Adding package into workspace:
@@ -27,7 +27,7 @@ or
 	roslaunch base_vision armor_detection.lanch color:=red
 
 
-Running the object detection for UAV: (detects cross/circle in red/blue color)
+Running the object detection for UAV: (detects circles)
 
 
 	roslaunch base_vision cross.launch

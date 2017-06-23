@@ -103,7 +103,7 @@ void detect_symbol()
     double hull_area = contourArea(hull);
 
     //Circle detection
-    if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05)
+    if((std::fabs(area/mr_area - 3.141593/4) < 0.08) && (std::fabs(area/hull_area - 1) < 0.04)
                                                     && (std::fabs((float)rect.height/rect.width - 1) < 0.7)
                                                     && (hierarchy[i][2] != -1))
       object_found();

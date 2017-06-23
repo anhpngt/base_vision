@@ -44,11 +44,11 @@ cv::Mat src, croppedRef, cropped, hsv, dst, /*dst_bgr,*/ black, bin;
 cv::Scalar up_lim, low_lim, up_lim_wrap, low_lim_wrap;
 cv::Scalar low_black, up_black;
 cv::Mat lower_hue_range, upper_hue_range;
-cv::Mat str_el = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3));
+cv::Mat str_el = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2,2));
 cv::Rect rect;
 cv::RotatedRect mr;
 int height, width;
-int min_area = 50;
+int min_area = 300;
 double area, r_area, mr_area;
 const double eps = 0.15;
 
@@ -106,7 +106,7 @@ void detect_armor()
     rect = cv::boundingRect(contours[i]);
     area = cv::contourArea(contours[i]);
     //Delete the contours that are too small or not seem to be the LED on the armor
-    if(area < min_area)
+    if(rect.height < height*0.055)
     {
       if(debug) cv::drawContours(dst, contours, i, Scalar(0,0,0),-1);
       continue;
@@ -124,14 +124,15 @@ void detect_armor()
       continue;
     }
     //If contour is good, save the contour for further processing
+    if(debug) cv::drawContours(src, contours, i, cv::Scalar(0,255,0), 2);
     contour_index.push_back(i);
   }
-  if(contour_index.empty()) return;
+  // if(contour_index.empty()) return;
   //*********************************
   //Filter the numbering circle (color = black)
   cv::inRange(hsv, low_black, up_black, dst);
   //Reduce noise
-  reduce_noise(&dst);
+  // reduce_noise(&dst);
   //Finding shapes
   cv::findContours(dst.clone(), circle_contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
   //Detect shape for each contour
@@ -139,9 +140,10 @@ void detect_armor()
   {
     //Skip small objects
     area = cv::contourArea(circle_contours[i]);
-    if(area < min_area) continue;
 
     rect = cv::boundingRect(circle_contours[i]);
+    if(rect.height < height*0.055) continue;
+    
     mr = cv::minAreaRect(circle_contours[i]);
     mr_area = (mr.size).height*(mr.size).width;
 
@@ -152,23 +154,23 @@ void detect_armor()
     if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05) 
         && (std::fabs((float)rect.height/rect.width - 1) < 0.7))
     {//Circle found
-      cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
-      cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
+      // cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
+      if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
       //Save the circle for further processing
       circle_contours_index.push_back(i);
     }
   }
   if(debug) cv::imshow("black", dst);
+  if(contour_index.empty() || circle_contours_index.empty()) return;
+
   //*********************************
   //Final process
-  // cv::cvtColor(dst,dst_bgr,COLOR_GRAY2BGR);
   for(int i = 0; i < contour_index.size()-1; i++)
     for(int j = i+1; j < contour_index.size(); j++)
     {
       if(i==j) continue;
       cv::RotatedRect rect1 = cv::minAreaRect(contours[contour_index[i]]);
       cv::RotatedRect rect2 = cv::minAreaRect(contours[contour_index[j]]);
-      // cout << rect1.center << " and " << rect2.center << endl;
 
       //Check angles of 2 LEDs
       //***Note: since there is a circle between the LEDs as an indicator, angle checking is no longer really needed
@@ -188,13 +190,15 @@ void detect_armor()
 
       //Check if there is a circle between the LEDs
       bool circle_check = false;
+      // circle(src, (rect1.center + rect2.center)*0.5, 7, cv::Scalar(255,0,0), -1);
       for(int k = 0; k < circle_contours_index.size(); k++)
-        if(cv::pointPolygonTest(circle_contours[k], (rect1.center + rect2.center)*0.5, false) > 1)
+        if(cv::pointPolygonTest(circle_contours[circle_contours_index[k]], (rect1.center + rect2.center)*0.5, false) > 0)
         {
           circle_check = true;
           circle_contours_index.erase(circle_contours_index.begin()+k);
+          break;
         }
-      if(circle_check = false) continue;
+      if(circle_check == false) continue;
 
       //Finished checking, armor confirmed
       armor_found(contour_index[i], contour_index[j], LED_length);

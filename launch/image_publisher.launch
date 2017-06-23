@@ -1,5 +1,5 @@
 <launch>
-	<arg name="image" default="cross3.png"/>
+	<arg name="image" default="5.png"/>
 	<arg name="output" default="image_rect_color"/>
 	<group>
 		<node
