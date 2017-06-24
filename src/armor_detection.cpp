@@ -31,6 +31,7 @@ using namespace std;
 std::string subscribed_image_topic;
 std::string armor_color;
 std::string published_topic;
+int detection_mode;
 bool debug;
 //Image transport vars
 cv_bridge::CvImagePtr cv_ptr;
@@ -84,7 +85,7 @@ void armor_found(int a, int b, float LED_length)
   return;
 }
 
-void detect_armor()
+void detect_armor_mode_0()
 {
   //*********************************
   //Filter desired color (color = indicated in the launch file)
@@ -219,6 +220,60 @@ void detect_armor()
   return;
 }
 
+void detect_armor_mode_1()
+{
+  //Filter the numbering circle (color = black)
+  cv::inRange(hsv, low_black, up_black, dst);
+  //Reduce noise
+  // reduce_noise(&dst);
+  //Finding shapes
+  cv::findContours(dst.clone(), circle_contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
+  //Detect shape for each contour
+  for(int i = 0; i < circle_contours.size(); i++)
+  {
+    //Skip small objects
+    area = cv::contourArea(circle_contours[i]);
+
+    rect = cv::boundingRect(circle_contours[i]);
+    if(rect.height < height*0.055) continue;
+    
+    mr = cv::minAreaRect(circle_contours[i]);
+    mr_area = (mr.size).height*(mr.size).width;
+
+    vector<Point> hull;
+    convexHull(circle_contours[i], hull, 0, 1);
+    double hull_area = contourArea(hull);
+
+    if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05) 
+        && (std::fabs((float)rect.height/rect.width - 1) < 0.7))
+    { //Circle found
+      cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
+      if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
+      cv::Point armor_top_left = rect.tl() - cv::Point(rect.width, rect.height)*0.5;
+      cv::Point armor_bot_right = rect.br() + cv::Point(1,1) + cv::Point(rect.width, rect.height)*0.5;
+      cv::Rect armor_roi(armor_top_left, armor_bot_right);
+      int no_positive_pixels = cv::countNonZero(dst(armor_roi));
+      if((float)no_positive_pixels/(armor_roi.height*armor_roi.width - area) > 0.95)
+      { //Armor found
+        sensor_msgs::RegionOfInterest obj;
+        float x_offset = (rect.tl() - cv::Point(rect.width, rect.height)*0.8).x;
+          obj.x_offset = x_offset;
+        float y_offset = (rect.tl() - cv::Point(rect.width, rect.height)*0.8).y;
+          obj.y_offset = y_offset;
+        float armor_height = rect.height*2.6;
+          obj.height = armor_height;
+        float armor_width = rect.width*2.6;
+          obj.width = armor_width;
+          obj.do_rectify = true;
+        object.push_back(obj);  //Push the object to the vector
+        if(debug) cv::rectangle(src, cv::Point(x_offset, y_offset), cv::Point(x_offset + armor_width, y_offset + armor_height), cv::Scalar(255,0,255), 2, 8, 0);
+      }
+    }
+  }
+  if(debug) cv::imshow("black", dst);
+  return;
+}
+
 void imageCb(const sensor_msgs::ImageConstPtr& msg)
 {
   try
@@ -246,7 +301,8 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg)
   cv::blur(src,src,Size(1,1));
   cv::cvtColor(src,hsv,COLOR_BGR2HSV);
   //Detect stuffs
-  detect_armor();
+  if(!detection_mode) detect_armor_mode_0();
+  else detect_armor_mode_1();
   //Show output on screen in debug mode
   if(debug) 
   {
@@ -283,6 +339,7 @@ int main(int argc, char** argv)
   ros::NodeHandle pnh("~");
   pnh.getParam("subscribed_image_topic", subscribed_image_topic);
   pnh.getParam("armor_color", armor_color);
+  pnh.getParam("mode", detection_mode);
   pnh.getParam("debug", debug);
   pnh.getParam("published_topic", published_topic);
   dynamic_reconfigure::Server<base_vision::armor_colorConfig> server;
@@ -295,15 +352,18 @@ int main(int argc, char** argv)
   {
    /* cv::namedWindow("color",WINDOW_AUTOSIZE);
     cv::namedWindow("src",WINDOW_AUTOSIZE);*/
-    cv::namedWindow("black",WINDOW_NORMAL);
-    cv::resizeWindow("black",640,480);
-    cv::moveWindow("black", 800, 0);
-    cv::namedWindow("LEDs",WINDOW_NORMAL);
-    cv::resizeWindow("LEDs",640,480);
-    cv::moveWindow("LEDs", 0, 600);
     cv::namedWindow("src",WINDOW_NORMAL);
     cv::resizeWindow("src",640,480);
     cv::moveWindow("src", 0, 0);
+    cv::namedWindow("black",WINDOW_NORMAL);
+    cv::resizeWindow("black",640,480);
+    cv::moveWindow("black", 0, 600);
+    if(!detection_mode)
+    {
+      cv::namedWindow("LEDs",WINDOW_NORMAL);
+      cv::resizeWindow("LEDs",640,480);
+      cv::moveWindow("LEDs", 800, 0);
+    }
     cv::startWindowThread();
   }
   //Start ROS subscriber...

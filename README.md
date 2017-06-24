@@ -1,4 +1,10 @@
-**New updates on 23-Jun-2017.
+**New updates on 24-Jun-2017: armor_detection node now has 2 modes
+
+	mode = 0 for detection with both LEDs and circle stickers
+
+	mode = 1 for detection with only circle stickers
+
+Detection mode can be adjusted in the launch file, under the [mode] argument.
 
 
 Adding package into workspace:
@@ -20,11 +26,11 @@ Adding package into workspace:
 Running the armor detection node:
 
 
-	roslaunch base_vision armor_detection.launch (the default color of LEDs is blue)
+	roslaunch base_vision armor_detection.launch (the default color of LEDs is red)
 
 or
 
-	roslaunch base_vision armor_detection.lanch color:=red
+	roslaunch base_vision armor_detection.lanch color:=blue
 
 
 Running the object detection for UAV: (detects circles)
