@@ -247,11 +247,15 @@ void detect_armor_mode_1()
     if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05) 
         && (std::fabs((float)rect.height/rect.width - 1) < 0.7))
     { //Circle found
+      if((rect.height*2.6 > height) || (rect.width*2.6 > width)) continue;
       cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
       if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
       cv::Point armor_top_left = rect.tl() - cv::Point(rect.width, rect.height)*0.5;
       cv::Point armor_bot_right = rect.br() + cv::Point(1,1) + cv::Point(rect.width, rect.height)*0.5;
       cv::Rect armor_roi(armor_top_left, armor_bot_right);
+
+      //Abort if the roi is bigger than the image frame itself
+      if(!((armor_roi & cv::Rect(0, 0, width, height)) == armor_roi)) continue;
       int no_positive_pixels = cv::countNonZero(dst(armor_roi));
       if((float)no_positive_pixels/(armor_roi.height*armor_roi.width - area) > 0.95)
       { //Armor found
