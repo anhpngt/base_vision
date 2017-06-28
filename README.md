@@ -25,7 +25,7 @@ Running the armor detection node:
 
 	roslaunch base_vision armor_detection.launch
 
-Note the [color] and [mode] parameters of the armor detection node:
+Note the [color] and [mode] parameters of the armor detection node (changed via terminal or inside the launch file)
 	
 	color:=red for red LEDs
 
@@ -34,7 +34,7 @@ Note the [color] and [mode] parameters of the armor detection node:
 	mode:=0 for detection with both LEDs and circle stickers
 
 	mode:=1 for detection with only circle stickers
-	
+
 
 Running the object detection for UAV: (detects circles)
 
