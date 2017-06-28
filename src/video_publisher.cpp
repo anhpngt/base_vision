@@ -24,9 +24,9 @@ int main(int argc, char** argv)
 
   image_transport::ImageTransport it(nh);
   image_transport::Publisher pub = it.advertise("image_rect_color", 1);
-  cv::waitKey(30);
+  cv::waitKey(10);
   ROS_INFO("Press p to play/pause.");
-  ros::Rate loop_rate(10);
+  ros::Rate loop_rate(20);
   bool play = true;
   while (nh.ok()) 
   {

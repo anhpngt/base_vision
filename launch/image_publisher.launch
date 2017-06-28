@@ -1,5 +1,5 @@
 <launch>
-	<arg name="image" default="6.png"/>
+	<arg name="image" default="11.png"/>
 	<arg name="output" default="image_rect_color"/>
 	<group>
 		<node
