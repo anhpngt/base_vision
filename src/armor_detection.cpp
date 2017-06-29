@@ -50,6 +50,7 @@ cv::Rect rect;
 cv::RotatedRect mr;
 int height, width;
 int min_area = 300;
+float min_height_ratio = 0.03;
 double area, r_area, mr_area;
 const double eps = 0.15;
 
@@ -107,7 +108,7 @@ void detect_armor_mode_0()
     rect = cv::boundingRect(contours[i]);
     area = cv::contourArea(contours[i]);
     //Delete the contours that are too small or not seem to be the LED on the armor
-    if(rect.height < height*0.055)
+    if(rect.height < height*min_height_ratio)
     {
       if(debug) cv::drawContours(dst, contours, i, Scalar(0,0,0),-1);
       continue;
@@ -143,7 +144,7 @@ void detect_armor_mode_0()
     area = cv::contourArea(circle_contours[i]);
 
     rect = cv::boundingRect(circle_contours[i]);
-    if(rect.height < height*0.055) continue;
+    if(rect.height < height*min_height_ratio) continue;
     
     mr = cv::minAreaRect(circle_contours[i]);
     mr_area = (mr.size).height*(mr.size).width;
@@ -153,7 +154,7 @@ void detect_armor_mode_0()
     double hull_area = contourArea(hull);
 
     if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05) 
-        && (std::fabs((float)rect.height/rect.width - 1) < 0.7))
+        && (std::fabs((float)rect.height/rect.width - 1) < 0.2))
     {//Circle found
       // cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
       if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
@@ -235,7 +236,7 @@ void detect_armor_mode_1()
     area = cv::contourArea(circle_contours[i]);
 
     rect = cv::boundingRect(circle_contours[i]);
-    if(rect.height < height*0.055) continue;
+    if(rect.height < height*min_height_ratio) continue;
     
     mr = cv::minAreaRect(circle_contours[i]);
     mr_area = (mr.size).height*(mr.size).width;
@@ -245,17 +246,18 @@ void detect_armor_mode_1()
     double hull_area = contourArea(hull);
 
     if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05) 
-        && (std::fabs((float)rect.height/rect.width - 1) < 0.7))
+        && (std::fabs((float)rect.height/rect.width - 1) < 0.2))
     { //Circle found
       if((rect.height*2.6 > height) || (rect.width*2.6 > width)) continue;
       cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
       if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
-      cv::Point armor_top_left = rect.tl() - cv::Point(rect.width, rect.height)*0.5;
-      cv::Point armor_bot_right = rect.br() + cv::Point(1,1) + cv::Point(rect.width, rect.height)*0.5;
+      cv::Point armor_top_left = rect.tl() - cv::Point(rect.width*0.25, rect.height*0.7);
+      cv::Point armor_bot_right = rect.br() + cv::Point(1,1) + cv::Point(rect.width*0.25, rect.height*0.7);
       cv::Rect armor_roi(armor_top_left, armor_bot_right);
 
       //Abort if the roi is bigger than the image frame itself
       if(!((armor_roi & cv::Rect(0, 0, width, height)) == armor_roi)) continue;
+      // if(debug) cv::rectangle(src, armor_top_left, armor_bot_right, cv::Scalar(255,255,0), 2, 8, 0);
       int no_positive_pixels = cv::countNonZero(dst(armor_roi));
       if((float)no_positive_pixels/(armor_roi.height*armor_roi.width - area) > 0.95)
       { //Armor found
@@ -317,13 +319,14 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg)
 void dynamic_configCb(base_vision::armor_colorConfig &config, uint32_t level) 
 {
   min_area = config.min_area;
-  low_black = cv::Scalar(config.black_H_low, config.black_S_low, config.black_V_low);
-  up_black = cv::Scalar(config.black_H_high, config.black_S_high, config.black_V_high);
   //Process appropriate parameter for armor color
   if(armor_color == "blue") 
   {
     low_lim = cv::Scalar(config.blue_H_low,config.blue_S_low,config.blue_V_low);
     up_lim = cv::Scalar(config.blue_H_high,config.blue_S_high,config.blue_V_high);
+
+    low_black = cv::Scalar(config.black_H_low_b, config.black_S_low_b, config.black_V_low_b);
+    up_black = cv::Scalar(config.black_H_high_b, config.black_S_high_b, config.black_V_high_b);
   }
   else if(armor_color == "red")
   {
@@ -331,6 +334,9 @@ void dynamic_configCb(base_vision::armor_colorConfig &config, uint32_t level)
     up_lim = cv::Scalar(config.red_H_high1, config.red_S_high, config.red_V_high);
     low_lim_wrap = cv::Scalar(config.red_H_low2, config.red_S_low, config.red_V_low);
     up_lim_wrap = cv::Scalar(config.red_H_high2, config.red_S_high, config.red_V_high);
+
+    low_black = cv::Scalar(config.black_H_low_r, config.black_S_low_r, config.black_V_low_r);
+    up_black = cv::Scalar(config.black_H_high_r, config.black_S_high_r, config.black_V_high_r);
   }
   ROS_INFO("Reconfigure Requested.");
 }
