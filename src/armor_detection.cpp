@@ -262,17 +262,21 @@ void detect_armor_mode_1()
       if((float)no_positive_pixels/(armor_roi.height*armor_roi.width - area) > 0.95)
       { //Armor found
         sensor_msgs::RegionOfInterest obj;
-        float x_offset = (rect.tl() - cv::Point(rect.width, rect.height)*0.8).x;
-          obj.x_offset = x_offset;
-        float y_offset = (rect.tl() - cv::Point(rect.width, rect.height)*0.8).y;
-          obj.y_offset = y_offset;
+        cv::Point offset = (rect.tl() - cv::Point(rect.width, rect.height)*0.8);
+        if(offset.x < 0) offset.x = 0;
+        else if(offset.x > width) offset.x = width;
+        if(offset.y < 0) offset.y = 0;
+        else if(offset.y > height) offset.y = height;
+        obj.x_offset = offset.x;
+        obj.y_offset = offset.y;
         float armor_height = rect.height*2.6;
           obj.height = armor_height;
         float armor_width = rect.width*2.6;
           obj.width = armor_width;
           obj.do_rectify = true;
+
         object.push_back(obj);  //Push the object to the vector
-        if(debug) cv::rectangle(src, cv::Point(x_offset, y_offset), cv::Point(x_offset + armor_width, y_offset + armor_height), cv::Scalar(255,0,255), 2, 8, 0);
+        if(debug) cv::rectangle(src, offset, offset + cv::Point(armor_width, armor_height), cv::Scalar(255,0,255), 2, 8, 0);
       }
     }
   }
