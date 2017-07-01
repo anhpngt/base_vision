@@ -1,4 +1,4 @@
-**New updates on 28-Jun-2017.
+**New updates on 01-Jul-2017: fix a few bugs
 
 
 Detection mode can be adjusted in the launch file, under the [mode] argument.
