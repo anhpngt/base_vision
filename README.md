@@ -1,4 +1,4 @@
-**New updates on 01-Jul-2017: fix a few bugs
+**New updates on 04-Jul-2017: add node to detect a 3x3 matrix green board
 
 
 Detection mode can be adjusted in the launch file, under the [mode] argument.
@@ -36,10 +36,9 @@ Note the [color] and [mode] parameters of the armor detection node (changed via 
 	mode:=1 for detection with only circle stickers
 
 
-Running the object detection for UAV: (detects circles)
+Running the 3x3 matrix green board detection:
 
-
-	roslaunch base_vision cross.launch
+	roslaunch base_vision matrix3x3board.launch
 
 
 Running the red ball targetting node:
