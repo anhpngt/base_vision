@@ -1,5 +1,5 @@
 <launch>
-	<arg name="color" default="blue"/>
+	<arg name="color" default="red"/>
 	<arg name="debug" default="true"/>
 	<arg name="mode" default="1"/>
 	<!-- 	mode = 0 for detection with LEDs + circle sticker
