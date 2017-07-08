@@ -41,9 +41,9 @@ vector<sensor_msgs::RegionOfInterest> object;
 std::vector<std::vector<cv::Point> > contours, circle_contours;
 std::vector<cv::Vec4i> hierarchy;
 std::vector<int> contour_index, circle_contours_index;
-cv::Mat src, croppedRef, cropped, hsv, dst, /*dst_bgr,*/ black, bin;
+cv::Mat src, /*croppedRef, cropped,*/ hsv, gray, dst;
 cv::Scalar up_lim, low_lim, up_lim_wrap, low_lim_wrap;
-cv::Scalar low_black, up_black;
+cv::Scalar low_black, up_black, low_white, up_white;
 cv::Mat lower_hue_range, upper_hue_range;
 cv::Mat str_el = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2,2));
 cv::Rect rect;
@@ -223,12 +223,11 @@ void detect_armor_mode_0()
 
 void detect_armor_mode_1()
 {
-  //Filter the numbering circle (color = black)
-  cv::inRange(hsv, low_black, up_black, dst);
-  //Reduce noise
-  // reduce_noise(&dst);
+  cv::Mat black, white;
+  cv::inRange(gray, low_black, up_black, black);
+  cv::inRange(gray, low_white, up_white, white);
   //Finding shapes
-  cv::findContours(dst.clone(), circle_contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
+  cv::findContours(white.clone(), circle_contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
   //Detect shape for each contour
   for(int i = 0; i < circle_contours.size(); i++)
   {
@@ -257,8 +256,8 @@ void detect_armor_mode_1()
 
       //Abort if the roi is bigger than the image frame itself
       if(!((armor_roi & cv::Rect(0, 0, width, height)) == armor_roi)) continue;
-      // if(debug) cv::rectangle(src, armor_top_left, armor_bot_right, cv::Scalar(255,255,0), 2, 8, 0);
-      int no_positive_pixels = cv::countNonZero(dst(armor_roi));
+      // if(debug) cv::rectangle(src, armor_top_left, armor_bot_right, cv::Scalar(255,255,0), 2, 8, 0);  //Uncomment to see the region tested for black background
+      int no_positive_pixels = cv::countNonZero(black(armor_roi));
       if((float)no_positive_pixels/(armor_roi.height*armor_roi.width - area) > 0.95)
       { //Armor found
         sensor_msgs::RegionOfInterest obj;
@@ -280,7 +279,11 @@ void detect_armor_mode_1()
       }
     }
   }
-  if(debug) cv::imshow("black", dst);
+  if(debug) 
+  {
+    cv::imshow("black", black);
+    cv::imshow("white", white);
+  }
   return;
 }
 
@@ -309,10 +312,16 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg)
   // croppedRef.copyTo(cropped); //change src to crop below to crop the image b4 processing
   //Start the shape detection code
   cv::blur(src,src,Size(1,1));
-  cv::cvtColor(src,hsv,COLOR_BGR2HSV);
-  //Detect stuffs
-  if(!detection_mode) detect_armor_mode_0();
-  else detect_armor_mode_1();
+  if(!detection_mode) //If mode 0
+  {
+    cv::cvtColor(src, hsv, COLOR_BGR2HSV);
+    detect_armor_mode_0();
+  }
+  else // Else mode 1
+  {
+    cv::cvtColor(src, gray, COLOR_BGR2GRAY);
+    detect_armor_mode_1();
+  }
   //Show output on screen in debug mode
   if(debug) 
   {
@@ -324,23 +333,33 @@ void dynamic_configCb(base_vision::armor_colorConfig &config, uint32_t level)
 {
   min_area = config.min_area;
   //Process appropriate parameter for armor color
-  if(armor_color == "blue") 
+  if(!detection_mode) //If mode 0
   {
-    low_lim = cv::Scalar(config.blue_H_low,config.blue_S_low,config.blue_V_low);
-    up_lim = cv::Scalar(config.blue_H_high,config.blue_S_high,config.blue_V_high);
+    if(armor_color == "blue") 
+    {
+      low_lim = cv::Scalar(config.blue_H_low,config.blue_S_low,config.blue_V_low);
+      up_lim = cv::Scalar(config.blue_H_high,config.blue_S_high,config.blue_V_high);
 
-    low_black = cv::Scalar(config.black_H_low_b, config.black_S_low_b, config.black_V_low_b);
-    up_black = cv::Scalar(config.black_H_high_b, config.black_S_high_b, config.black_V_high_b);
+      low_black = cv::Scalar(config.black_H_low_b, config.black_S_low_b, config.black_V_low_b);
+      up_black = cv::Scalar(config.black_H_high_b, config.black_S_high_b, config.black_V_high_b);
+    }
+    else if(armor_color == "red")
+    {
+      low_lim = cv::Scalar(config.red_H_low1, config.red_S_low, config.red_V_low);
+      up_lim = cv::Scalar(config.red_H_high1, config.red_S_high, config.red_V_high);
+      low_lim_wrap = cv::Scalar(config.red_H_low2, config.red_S_low, config.red_V_low);
+      up_lim_wrap = cv::Scalar(config.red_H_high2, config.red_S_high, config.red_V_high);
+
+      low_black = cv::Scalar(config.black_H_low_r, config.black_S_low_r, config.black_V_low_r);
+      up_black = cv::Scalar(config.black_H_high_r, config.black_S_high_r, config.black_V_high_r);
+    }
   }
-  else if(armor_color == "red")
+  else //If mode 1
   {
-    low_lim = cv::Scalar(config.red_H_low1, config.red_S_low, config.red_V_low);
-    up_lim = cv::Scalar(config.red_H_high1, config.red_S_high, config.red_V_high);
-    low_lim_wrap = cv::Scalar(config.red_H_low2, config.red_S_low, config.red_V_low);
-    up_lim_wrap = cv::Scalar(config.red_H_high2, config.red_S_high, config.red_V_high);
-
-    low_black = cv::Scalar(config.black_H_low_r, config.black_S_low_r, config.black_V_low_r);
-    up_black = cv::Scalar(config.black_H_high_r, config.black_S_high_r, config.black_V_high_r);
+    low_black = cv::Scalar(config.black_low_mode1);
+    up_black = cv::Scalar(config.black_high_mode1);
+    low_white = cv::Scalar(config.white_low_mode1);
+    up_white = cv::Scalar(config.white_high_mode1);
   }
   ROS_INFO("Reconfigure Requested.");
 }
@@ -360,6 +379,7 @@ int main(int argc, char** argv)
   dynamic_reconfigure::Server<base_vision::armor_colorConfig>::CallbackType f;
   f = boost::bind(&dynamic_configCb, _1, _2);
   server.setCallback(f);
+  ROS_INFO("Operating mode: %d", detection_mode);
   
   //Initiate windows
   if(debug)
@@ -377,6 +397,12 @@ int main(int argc, char** argv)
       cv::namedWindow("LEDs",WINDOW_NORMAL);
       cv::resizeWindow("LEDs",640,480);
       cv::moveWindow("LEDs", 800, 0);
+    }
+    else
+    {
+      cv::namedWindow("white",WINDOW_NORMAL);
+      cv::resizeWindow("white",640,480);
+      cv::moveWindow("white", 800, 0); 
     }
     cv::startWindowThread();
   }

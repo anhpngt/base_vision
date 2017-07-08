@@ -1,4 +1,4 @@
-**New updates on 04-Jul-2017: add node to detect a 3x3 matrix green board
+**New updates on 08-Jul-2017: update to improve armor detection node
 
 
 Detection mode can be adjusted in the launch file, under the [mode] argument.
