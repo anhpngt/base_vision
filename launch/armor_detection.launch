@@ -2,8 +2,9 @@
 	<arg name="color" default="blue"/>
 	<arg name="debug" default="true"/>
 	<arg name="mode" default="1"/>
-	<!-- 	mode = 0 for detection with LEDs + circle sticker
-				mode = 1 for detection with only circle sticker
+	<!-- 	mode = 0 for detection with LEDs + circle sticker, color specified
+				mode = 1 for detection with only circle sticker, using hsv, color specified
+				mode = 2 for detection with only circle sticker, using grayscale
 	-->
 
 		<node

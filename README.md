@@ -1,7 +1,7 @@
-**New updates on 08-Jul-2017: update to improve armor detection node
+**New updates on 10-Jul-2017: update to improve armor detection node
 
 
-Detection mode can be adjusted in the launch file, under the [mode] argument.
+Detection mode and color can be adjusted in the launch file, under the [mode] and [color] argument, respectively.
 
 
 Adding package into workspace:
@@ -33,7 +33,11 @@ Note the [color] and [mode] parameters of the armor detection node (changed via 
 
 	mode:=0 for detection with both LEDs and circle stickers
 
-	mode:=1 for detection with only circle stickers
+	mode:=1 for detection with only circle stickers, using hsv conversion
+
+	mode:=2 for detection with only circle stickers, using grayscale conversion
+
+In mode 0 and 1, the color (red or blue) must be specified for better detection.
 
 
 Running the 3x3 matrix green board detection:

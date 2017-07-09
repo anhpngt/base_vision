@@ -53,6 +53,8 @@ int min_area = 300;
 float min_height_ratio = 0.03;
 double area, r_area, mr_area;
 const double eps = 0.15;
+const float circle_accuracy = 0.04;
+const float circle_to_checkbox_ratio = 0.3;
 
 //Functions
 void reduce_noise(cv::Mat* dst)
@@ -223,6 +225,71 @@ void detect_armor_mode_0()
 
 void detect_armor_mode_1()
 {
+  //Filter the numbering circle (color = black)
+  cv::inRange(hsv, low_black, up_black, dst);
+  //Finding shapes
+  cv::findContours(dst.clone(), circle_contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
+  //Detect shape for each contour
+  for(int i = 0; i < circle_contours.size(); i++)
+  {
+    //Skip small objects
+    area = cv::contourArea(circle_contours[i]);
+
+    rect = cv::boundingRect(circle_contours[i]);
+    if(rect.height < height*min_height_ratio) continue;
+    
+    mr = cv::minAreaRect(circle_contours[i]);
+    mr_area = (mr.size).height*(mr.size).width;
+
+    vector<Point> hull;
+    convexHull(circle_contours[i], hull, 0, 1);
+    double hull_area = contourArea(hull);
+
+    if((std::fabs(area/mr_area - 3.141593/4) < circle_accuracy) && (std::fabs(area/hull_area - 1) < circle_accuracy) 
+        && (std::fabs((float)rect.height/rect.width - 1) < 0.2))
+    { //Circle found
+      if((rect.height*2.6 > height) || (rect.width*2.6 > width)) continue;
+      cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
+      if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
+
+      cv::Point armor_top_left = rect.tl() - cv::Point(rect.width*circle_to_checkbox_ratio, rect.height*circle_to_checkbox_ratio);
+      cv::Point armor_bot_right = rect.br() + cv::Point(1,1) + cv::Point(rect.width*circle_to_checkbox_ratio, rect.height*circle_to_checkbox_ratio);
+      cv::Rect armor_roi(armor_top_left, armor_bot_right);
+
+      //Abort if the roi is bigger than the image frame itself
+      if(!((armor_roi & cv::Rect(0, 0, width, height)) == armor_roi)) continue;
+      if(debug) cv::rectangle(src, armor_top_left, armor_bot_right, cv::Scalar(255,255,0), 2, 8, 0);  //Uncomment to see the region tested for black background
+      int no_positive_pixels = cv::countNonZero(dst(armor_roi));
+      if((float)no_positive_pixels/(armor_roi.height*armor_roi.width - area) > 0.95)
+      { //Armor found
+        sensor_msgs::RegionOfInterest obj;
+        cv::Point offset = (rect.tl() - cv::Point(rect.width, rect.height)*0.8);
+        if(offset.x < 0) offset.x = 0;
+        else if(offset.x > width) offset.x = width;
+        if(offset.y < 0) offset.y = 0;
+        else if(offset.y > height) offset.y = height;
+        obj.x_offset = offset.x;
+        obj.y_offset = offset.y;
+        float armor_height = rect.height*2.6;
+          obj.height = armor_height;
+        float armor_width = rect.width*2.6;
+          obj.width = armor_width;
+          obj.do_rectify = true;
+
+        object.push_back(obj);  //Push the object to the vector
+        if(debug) cv::rectangle(src, offset, offset + cv::Point(armor_width, armor_height), cv::Scalar(255,0,255), 2, 8, 0);
+      }
+    }
+  }
+  if(debug) 
+  {
+    cv::imshow("black", dst);
+  }
+  return;
+}
+
+void detect_armor_mode_2()
+{
   cv::Mat black, white;
   cv::inRange(gray, low_black, up_black, black);
   cv::inRange(gray, low_white, up_white, white);
@@ -244,19 +311,19 @@ void detect_armor_mode_1()
     convexHull(circle_contours[i], hull, 0, 1);
     double hull_area = contourArea(hull);
 
-    if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05) 
+    if((std::fabs(area/mr_area - 3.141593/4) < circle_accuracy) && (std::fabs(area/hull_area - 1) < circle_accuracy) 
         && (std::fabs((float)rect.height/rect.width - 1) < 0.2))
     { //Circle found
       if((rect.height*2.6 > height) || (rect.width*2.6 > width)) continue;
       cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
       if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
-      cv::Point armor_top_left = rect.tl() - cv::Point(rect.width*0.25, rect.height*0.7);
-      cv::Point armor_bot_right = rect.br() + cv::Point(1,1) + cv::Point(rect.width*0.25, rect.height*0.7);
+      cv::Point armor_top_left = rect.tl() - cv::Point(rect.width*circle_to_checkbox_ratio, rect.height*circle_to_checkbox_ratio);
+      cv::Point armor_bot_right = rect.br() + cv::Point(1,1) + cv::Point(rect.width*circle_to_checkbox_ratio, rect.height*circle_to_checkbox_ratio);
       cv::Rect armor_roi(armor_top_left, armor_bot_right);
 
       //Abort if the roi is bigger than the image frame itself
       if(!((armor_roi & cv::Rect(0, 0, width, height)) == armor_roi)) continue;
-      // if(debug) cv::rectangle(src, armor_top_left, armor_bot_right, cv::Scalar(255,255,0), 2, 8, 0);  //Uncomment to see the region tested for black background
+      if(debug) cv::rectangle(src, armor_top_left, armor_bot_right, cv::Scalar(255,255,0), 2, 8, 0);  //Uncomment to see the region tested for black background
       int no_positive_pixels = cv::countNonZero(black(armor_roi));
       if((float)no_positive_pixels/(armor_roi.height*armor_roi.width - area) > 0.95)
       { //Armor found
@@ -317,10 +384,15 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg)
     cv::cvtColor(src, hsv, COLOR_BGR2HSV);
     detect_armor_mode_0();
   }
-  else // Else mode 1
+  else if(detection_mode == 1)
+  {
+    cv::cvtColor(src, hsv, COLOR_BGR2HSV);
+    detect_armor_mode_1(); 
+  }
+  else // Else mode 2
   {
     cv::cvtColor(src, gray, COLOR_BGR2GRAY);
-    detect_armor_mode_1();
+    detect_armor_mode_2();
   }
   //Show output on screen in debug mode
   if(debug) 
@@ -333,7 +405,7 @@ void dynamic_configCb(base_vision::armor_colorConfig &config, uint32_t level)
 {
   min_area = config.min_area;
   //Process appropriate parameter for armor color
-  if(!detection_mode) //If mode 0
+  if(detection_mode != 2) //If mode 0 or 1
   {
     if(armor_color == "blue") 
     {
@@ -398,7 +470,7 @@ int main(int argc, char** argv)
       cv::resizeWindow("LEDs",640,480);
       cv::moveWindow("LEDs", 800, 0);
     }
-    else
+    else if(detection_mode == 2)
     {
       cv::namedWindow("white",WINDOW_NORMAL);
       cv::resizeWindow("white",640,480);
