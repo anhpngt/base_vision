@@ -41,9 +41,9 @@ vector<sensor_msgs::RegionOfInterest> object;
 std::vector<std::vector<cv::Point> > contours, circle_contours;
 std::vector<cv::Vec4i> hierarchy;
 std::vector<int> contour_index, circle_contours_index;
-cv::Mat src, croppedRef, cropped, hsv, dst, /*dst_bgr,*/ black, bin;
+cv::Mat src, /*croppedRef, cropped,*/ hsv, gray, dst;
 cv::Scalar up_lim, low_lim, up_lim_wrap, low_lim_wrap;
-cv::Scalar low_black, up_black;
+cv::Scalar low_black, up_black, low_white, up_white;
 cv::Mat lower_hue_range, upper_hue_range;
 cv::Mat str_el = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2,2));
 cv::Rect rect;
@@ -53,6 +53,8 @@ int min_area = 300;
 float min_height_ratio = 0.03;
 double area, r_area, mr_area;
 const double eps = 0.15;
+const float circle_accuracy = 0.04;
+const float circle_to_checkbox_ratio = 0.3;
 
 //Functions
 void reduce_noise(cv::Mat* dst)
@@ -225,8 +227,6 @@ void detect_armor_mode_1()
 {
   //Filter the numbering circle (color = black)
   cv::inRange(hsv, low_black, up_black, dst);
-  //Reduce noise
-  // reduce_noise(&dst);
   //Finding shapes
   cv::findContours(dst.clone(), circle_contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
   //Detect shape for each contour
@@ -245,38 +245,112 @@ void detect_armor_mode_1()
     convexHull(circle_contours[i], hull, 0, 1);
     double hull_area = contourArea(hull);
 
-    if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05) 
+    if((std::fabs(area/mr_area - 3.141593/4) < circle_accuracy) && (std::fabs(area/hull_area - 1) < circle_accuracy) 
         && (std::fabs((float)rect.height/rect.width - 1) < 0.2))
     { //Circle found
       if((rect.height*2.6 > height) || (rect.width*2.6 > width)) continue;
       cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
       if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
-      cv::Point armor_top_left = rect.tl() - cv::Point(rect.width*0.25, rect.height*0.7);
-      cv::Point armor_bot_right = rect.br() + cv::Point(1,1) + cv::Point(rect.width*0.25, rect.height*0.7);
+
+      cv::Point armor_top_left = rect.tl() - cv::Point(rect.width*circle_to_checkbox_ratio, rect.height*circle_to_checkbox_ratio);
+      cv::Point armor_bot_right = rect.br() + cv::Point(1,1) + cv::Point(rect.width*circle_to_checkbox_ratio, rect.height*circle_to_checkbox_ratio);
       cv::Rect armor_roi(armor_top_left, armor_bot_right);
 
       //Abort if the roi is bigger than the image frame itself
       if(!((armor_roi & cv::Rect(0, 0, width, height)) == armor_roi)) continue;
-      // if(debug) cv::rectangle(src, armor_top_left, armor_bot_right, cv::Scalar(255,255,0), 2, 8, 0);
+      if(debug) cv::rectangle(src, armor_top_left, armor_bot_right, cv::Scalar(255,255,0), 2, 8, 0);  //Uncomment to see the region tested for black background
       int no_positive_pixels = cv::countNonZero(dst(armor_roi));
       if((float)no_positive_pixels/(armor_roi.height*armor_roi.width - area) > 0.95)
       { //Armor found
         sensor_msgs::RegionOfInterest obj;
-        float x_offset = (rect.tl() - cv::Point(rect.width, rect.height)*0.8).x;
-          obj.x_offset = x_offset;
-        float y_offset = (rect.tl() - cv::Point(rect.width, rect.height)*0.8).y;
-          obj.y_offset = y_offset;
+        cv::Point offset = (rect.tl() - cv::Point(rect.width, rect.height)*0.8);
+        if(offset.x < 0) offset.x = 0;
+        else if(offset.x > width) offset.x = width;
+        if(offset.y < 0) offset.y = 0;
+        else if(offset.y > height) offset.y = height;
+        obj.x_offset = offset.x;
+        obj.y_offset = offset.y;
         float armor_height = rect.height*2.6;
           obj.height = armor_height;
         float armor_width = rect.width*2.6;
           obj.width = armor_width;
           obj.do_rectify = true;
+
         object.push_back(obj);  //Push the object to the vector
-        if(debug) cv::rectangle(src, cv::Point(x_offset, y_offset), cv::Point(x_offset + armor_width, y_offset + armor_height), cv::Scalar(255,0,255), 2, 8, 0);
+        if(debug) cv::rectangle(src, offset, offset + cv::Point(armor_width, armor_height), cv::Scalar(255,0,255), 2, 8, 0);
       }
     }
   }
-  if(debug) cv::imshow("black", dst);
+  if(debug) 
+  {
+    cv::imshow("black", dst);
+  }
+  return;
+}
+
+void detect_armor_mode_2()
+{
+  cv::Mat black, white;
+  cv::inRange(gray, low_black, up_black, black);
+  cv::inRange(gray, low_white, up_white, white);
+  //Finding shapes
+  cv::findContours(white.clone(), circle_contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
+  //Detect shape for each contour
+  for(int i = 0; i < circle_contours.size(); i++)
+  {
+    //Skip small objects
+    area = cv::contourArea(circle_contours[i]);
+
+    rect = cv::boundingRect(circle_contours[i]);
+    if(rect.height < height*min_height_ratio) continue;
+    
+    mr = cv::minAreaRect(circle_contours[i]);
+    mr_area = (mr.size).height*(mr.size).width;
+
+    vector<Point> hull;
+    convexHull(circle_contours[i], hull, 0, 1);
+    double hull_area = contourArea(hull);
+
+    if((std::fabs(area/mr_area - 3.141593/4) < circle_accuracy) && (std::fabs(area/hull_area - 1) < circle_accuracy) 
+        && (std::fabs((float)rect.height/rect.width - 1) < 0.2))
+    { //Circle found
+      if((rect.height*2.6 > height) || (rect.width*2.6 > width)) continue;
+      cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
+      if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
+      cv::Point armor_top_left = rect.tl() - cv::Point(rect.width*circle_to_checkbox_ratio, rect.height*circle_to_checkbox_ratio);
+      cv::Point armor_bot_right = rect.br() + cv::Point(1,1) + cv::Point(rect.width*circle_to_checkbox_ratio, rect.height*circle_to_checkbox_ratio);
+      cv::Rect armor_roi(armor_top_left, armor_bot_right);
+
+      //Abort if the roi is bigger than the image frame itself
+      if(!((armor_roi & cv::Rect(0, 0, width, height)) == armor_roi)) continue;
+      if(debug) cv::rectangle(src, armor_top_left, armor_bot_right, cv::Scalar(255,255,0), 2, 8, 0);  //Uncomment to see the region tested for black background
+      int no_positive_pixels = cv::countNonZero(black(armor_roi));
+      if((float)no_positive_pixels/(armor_roi.height*armor_roi.width - area) > 0.95)
+      { //Armor found
+        sensor_msgs::RegionOfInterest obj;
+        cv::Point offset = (rect.tl() - cv::Point(rect.width, rect.height)*0.8);
+        if(offset.x < 0) offset.x = 0;
+        else if(offset.x > width) offset.x = width;
+        if(offset.y < 0) offset.y = 0;
+        else if(offset.y > height) offset.y = height;
+        obj.x_offset = offset.x;
+        obj.y_offset = offset.y;
+        float armor_height = rect.height*2.6;
+          obj.height = armor_height;
+        float armor_width = rect.width*2.6;
+          obj.width = armor_width;
+          obj.do_rectify = true;
+
+        object.push_back(obj);  //Push the object to the vector
+        if(debug) cv::rectangle(src, offset, offset + cv::Point(armor_width, armor_height), cv::Scalar(255,0,255), 2, 8, 0);
+      }
+    }
+  }
+  if(debug) 
+  {
+    cv::imshow("black", black);
+    cv::imshow("white", white);
+  }
   return;
 }
 
@@ -305,10 +379,21 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg)
   // croppedRef.copyTo(cropped); //change src to crop below to crop the image b4 processing
   //Start the shape detection code
   cv::blur(src,src,Size(1,1));
-  cv::cvtColor(src,hsv,COLOR_BGR2HSV);
-  //Detect stuffs
-  if(!detection_mode) detect_armor_mode_0();
-  else detect_armor_mode_1();
+  if(!detection_mode) //If mode 0
+  {
+    cv::cvtColor(src, hsv, COLOR_BGR2HSV);
+    detect_armor_mode_0();
+  }
+  else if(detection_mode == 1)
+  {
+    cv::cvtColor(src, hsv, COLOR_BGR2HSV);
+    detect_armor_mode_1(); 
+  }
+  else // Else mode 2
+  {
+    cv::cvtColor(src, gray, COLOR_BGR2GRAY);
+    detect_armor_mode_2();
+  }
   //Show output on screen in debug mode
   if(debug) 
   {
@@ -320,23 +405,33 @@ void dynamic_configCb(base_vision::armor_colorConfig &config, uint32_t level)
 {
   min_area = config.min_area;
   //Process appropriate parameter for armor color
-  if(armor_color == "blue") 
+  if(detection_mode != 2) //If mode 0 or 1
   {
-    low_lim = cv::Scalar(config.blue_H_low,config.blue_S_low,config.blue_V_low);
-    up_lim = cv::Scalar(config.blue_H_high,config.blue_S_high,config.blue_V_high);
+    if(armor_color == "blue") 
+    {
+      low_lim = cv::Scalar(config.blue_H_low,config.blue_S_low,config.blue_V_low);
+      up_lim = cv::Scalar(config.blue_H_high,config.blue_S_high,config.blue_V_high);
 
-    low_black = cv::Scalar(config.black_H_low_b, config.black_S_low_b, config.black_V_low_b);
-    up_black = cv::Scalar(config.black_H_high_b, config.black_S_high_b, config.black_V_high_b);
+      low_black = cv::Scalar(config.black_H_low_b, config.black_S_low_b, config.black_V_low_b);
+      up_black = cv::Scalar(config.black_H_high_b, config.black_S_high_b, config.black_V_high_b);
+    }
+    else if(armor_color == "red")
+    {
+      low_lim = cv::Scalar(config.red_H_low1, config.red_S_low, config.red_V_low);
+      up_lim = cv::Scalar(config.red_H_high1, config.red_S_high, config.red_V_high);
+      low_lim_wrap = cv::Scalar(config.red_H_low2, config.red_S_low, config.red_V_low);
+      up_lim_wrap = cv::Scalar(config.red_H_high2, config.red_S_high, config.red_V_high);
+
+      low_black = cv::Scalar(config.black_H_low_r, config.black_S_low_r, config.black_V_low_r);
+      up_black = cv::Scalar(config.black_H_high_r, config.black_S_high_r, config.black_V_high_r);
+    }
   }
-  else if(armor_color == "red")
+  else //If mode 1
   {
-    low_lim = cv::Scalar(config.red_H_low1, config.red_S_low, config.red_V_low);
-    up_lim = cv::Scalar(config.red_H_high1, config.red_S_high, config.red_V_high);
-    low_lim_wrap = cv::Scalar(config.red_H_low2, config.red_S_low, config.red_V_low);
-    up_lim_wrap = cv::Scalar(config.red_H_high2, config.red_S_high, config.red_V_high);
-
-    low_black = cv::Scalar(config.black_H_low_r, config.black_S_low_r, config.black_V_low_r);
-    up_black = cv::Scalar(config.black_H_high_r, config.black_S_high_r, config.black_V_high_r);
+    low_black = cv::Scalar(config.black_low_mode1);
+    up_black = cv::Scalar(config.black_high_mode1);
+    low_white = cv::Scalar(config.white_low_mode1);
+    up_white = cv::Scalar(config.white_high_mode1);
   }
   ROS_INFO("Reconfigure Requested.");
 }
@@ -356,6 +451,7 @@ int main(int argc, char** argv)
   dynamic_reconfigure::Server<base_vision::armor_colorConfig>::CallbackType f;
   f = boost::bind(&dynamic_configCb, _1, _2);
   server.setCallback(f);
+  ROS_INFO("Operating mode: %d", detection_mode);
   
   //Initiate windows
   if(debug)
@@ -373,6 +469,12 @@ int main(int argc, char** argv)
       cv::namedWindow("LEDs",WINDOW_NORMAL);
       cv::resizeWindow("LEDs",1024,576);
       cv::moveWindow("LEDs", 800, 0);
+    }
+    else if(detection_mode == 2)
+    {
+      cv::namedWindow("white",WINDOW_NORMAL);
+      cv::resizeWindow("white",640,480);
+      cv::moveWindow("white", 800, 0); 
     }
     cv::startWindowThread();
   }
