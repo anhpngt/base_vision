@@ -8,7 +8,6 @@
 #include <ros/console.h>
 #include <image_transport/image_transport.h>
 #include <sensor_msgs/image_encodings.h>
-#include <std_msgs/Bool.h>
 #include <cv_bridge/cv_bridge.h>
 #include <dynamic_reconfigure/server.h>
 #include <base_vision/armor_colorConfig.h>
@@ -34,8 +33,6 @@ std::string armor_color;
 std::string published_topic;
 int detection_mode;
 bool debug;
-bool pubd = false;
-ros::Subscriber csub;
 //Image transport vars
 cv_bridge::CvImagePtr cv_ptr;
 //ROS var
@@ -439,20 +436,6 @@ void dynamic_configCb(base_vision::armor_colorConfig &config, uint32_t level)
   ROS_INFO("Reconfigure Requested.");
 }
 
-void colorCb(const std_msgs::Bool clr)
-{
-  if (clr.data) {
-    armor_color = "blue";
-    ros::param::set("/armor_detection/armor_color", armor_color);
-  }
-  else {
-    armor_color = "red";
-    ros::param::set("/armor_detection/armor_color", armor_color);
-  }
-  pubd = true;
-  csub.shutdown();
-}
-
 int main(int argc, char** argv)
 {
   //Initiate node
@@ -460,11 +443,7 @@ int main(int argc, char** argv)
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
   pnh.getParam("subscribed_image_topic", subscribed_image_topic);
-  // pnh.getParam("armor_color", armor_color);
-  // emily changing this to setting armor_color after subscribing to the topic /color on arduino
-  ros::param::set("armor_detection/start", 1);
-  csub = nh.subscribe("/color", 10, colorCb);
-  while (!pubd) ros::spinOnce();
+  pnh.getParam("armor_color", armor_color);
   pnh.getParam("mode", detection_mode);
   pnh.getParam("debug", debug);
   pnh.getParam("published_topic", published_topic);
@@ -499,7 +478,6 @@ int main(int argc, char** argv)
     }
     cv::startWindowThread();
   }
- 
   //Start ROS subscriber...
   image_transport::ImageTransport it(nh);
   image_transport::Subscriber sub = it.subscribe(subscribed_image_topic, 1, imageCb);
