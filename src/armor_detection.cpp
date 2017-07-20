@@ -480,15 +480,15 @@ int main(int argc, char** argv)
    /* cv::namedWindow("color",WINDOW_AUTOSIZE);
     cv::namedWindow("src",WINDOW_AUTOSIZE);*/
     cv::namedWindow("src",WINDOW_NORMAL);
-    cv::resizeWindow("src",640,480);
+    cv::resizeWindow("src",1024,576);
     cv::moveWindow("src", 0, 0);
     cv::namedWindow("black",WINDOW_NORMAL);
-    cv::resizeWindow("black",640,480);
+    cv::resizeWindow("black",1024,576);
     cv::moveWindow("black", 0, 600);
     if(!detection_mode)
     {
       cv::namedWindow("LEDs",WINDOW_NORMAL);
-      cv::resizeWindow("LEDs",640,480);
+      cv::resizeWindow("LEDs",1024,576);
       cv::moveWindow("LEDs", 800, 0);
     }
     else if(detection_mode == 2)
