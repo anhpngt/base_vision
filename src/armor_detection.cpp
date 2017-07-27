@@ -33,6 +33,7 @@ std::string armor_color;
 std::string published_topic;
 int detection_mode;
 bool debug;
+bool root_debug = false;
 //Image transport vars
 cv_bridge::CvImagePtr cv_ptr;
 //ROS var
@@ -50,11 +51,11 @@ cv::Rect rect;
 cv::RotatedRect mr;
 int height, width;
 int min_area = 300;
-float min_height_ratio = 0.03;
+float min_height_ratio = 0.08;
 double area, r_area, mr_area;
+float circle_accuracy = 0.035; // Actually it is circle max error, will be adjusted in dynamic_configCb()
 const double eps = 0.15;
-const float circle_accuracy = 0.04;
-const float circle_to_checkbox_ratio = 0.3;
+const float circle_to_checkbox_ratio = 0.2;
 
 //Functions
 void reduce_noise(cv::Mat* dst)
@@ -76,9 +77,9 @@ void armor_found(int a, int b, float LED_length)
   }
   float x_offset = (recta.tl().x);
     obj.x_offset = x_offset;
-  float y_offset = ((recta.tl().y + rectb.tl().y)/2.0 - LED_length /*+ height/4*/); //note that the cropping makes change to the coordinate, which explains the height/4 component
+  float y_offset = ((recta.tl().y + rectb.tl().y)*0.5 - LED_length*0.5 /*+ height/4*/); //note that the cropping makes change to the coordinate, which explains the height/4 component
     obj.y_offset = y_offset;
-  float armor_height = 3*LED_length;
+  float armor_height = 2*LED_length;
     obj.height = armor_height;
   float armor_width = fabs(recta.tl().x - rectb.br().x);
     obj.width = armor_width;
@@ -155,8 +156,8 @@ void detect_armor_mode_0()
     convexHull(circle_contours[i], hull, 0, 1);
     double hull_area = contourArea(hull);
 
-    if((std::fabs(area/mr_area - 3.141593/4) < 0.1) && (std::fabs(area/hull_area - 1) < 0.05) 
-        && (std::fabs((float)rect.height/rect.width - 1) < 0.2))
+    if((std::fabs(area/mr_area - 3.141593/4) < circle_accuracy) && (std::fabs(area/hull_area - 1) < circle_accuracy) 
+        && (std::fabs((float)rect.height/rect.width - 1) < 0.35))
     {//Circle found
       // cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
       if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
@@ -168,7 +169,7 @@ void detect_armor_mode_0()
   if(contour_index.empty() || circle_contours_index.empty()) return;
 
   //*********************************
-  //Final process
+  //Final process: merging sets of LEDs and circles
   for(int i = 0; i < contour_index.size()-1; i++)
     for(int j = i+1; j < contour_index.size(); j++)
     {
@@ -178,23 +179,17 @@ void detect_armor_mode_0()
 
       //Check angles of 2 LEDs
       //***Note: since there is a circle between the LEDs as an indicator, angle checking is no longer really needed
-      // cout << "angle = " << fabs(rect1.angle - rect2.angle) << " =>>> " << (fabs(rect1.angle - rect2.angle) > 8.0) << endl;
       //if(fabs(rect1.angle - rect2.angle) > 5.0) continue;
 
       //Check sizes of 2 LEDs
-      // cout << "sizes are: " << max(rect1.size.height, rect1.size.width) << " and " << max(rect2.size.height, rect2.size.width) << endl;
-      // cout << "=>>> " << (fabs(max(rect1.size.height, rect1.size.width)/max(rect2.size.height, rect2.size.width) - 1) > 0.15) << endl;
       if(fabs(max(rect1.size.height, rect1.size.width)/max(rect2.size.height, rect2.size.width) - 1.0) > 0.2) continue;
 
       //Check distance between 2 LEDs
       float LED_length = max(rect1.size.height, rect1.size.width);
-      // cout << "ycenter " << fabs(rect1.center.y - rect2.center.y) << endl;
-      // cout << "xcenter " << fabs(rect1.center.x - rect2.center.x) << endl;
       if((fabs(rect1.center.y - rect2.center.y) > LED_length/2.0)||(fabs(rect1.center.x - rect2.center.x) > 5.0*LED_length)) continue;
 
-      //Check if there is a circle between the LEDs
+      // Check if there is a circle between the LEDs
       bool circle_check = false;
-      // circle(src, (rect1.center + rect2.center)*0.5, 7, cv::Scalar(255,0,0), -1);
       for(int k = 0; k < circle_contours_index.size(); k++)
         if(cv::pointPolygonTest(circle_contours[circle_contours_index[k]], (rect1.center + rect2.center)*0.5, false) > 0)
         {
@@ -204,9 +199,8 @@ void detect_armor_mode_0()
         }
       if(circle_check == false) continue;
 
-      //Finished checking, armor confirmed
+      // Finished checking, armor confirmed
       armor_found(contour_index[i], contour_index[j], LED_length);
-      // ROS_INFO("Found %d %d %f", i, j, LED_length);
       // cv::line(dst, contour_rrect[i].center, contour_rrect[j].center, Scalar(255,255,255),20);
       if(contour_index.size() <= 2)
       {
@@ -246,38 +240,39 @@ void detect_armor_mode_1()
     double hull_area = contourArea(hull);
 
     if((std::fabs(area/mr_area - 3.141593/4) < circle_accuracy) && (std::fabs(area/hull_area - 1) < circle_accuracy) 
-        && (std::fabs((float)rect.height/rect.width - 1) < 0.2))
+        && (std::fabs((float)rect.height/rect.width - 1) < 0.35))
     { //Circle found
-      if((rect.height*2.6 > height) || (rect.width*2.6 > width)) continue;
       cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
-      if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
+      if(root_debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
 
       cv::Point armor_top_left = rect.tl() - cv::Point(rect.width*circle_to_checkbox_ratio, rect.height*circle_to_checkbox_ratio);
       cv::Point armor_bot_right = rect.br() + cv::Point(1,1) + cv::Point(rect.width*circle_to_checkbox_ratio, rect.height*circle_to_checkbox_ratio);
       cv::Rect armor_roi(armor_top_left, armor_bot_right);
 
       //Abort if the roi is bigger than the image frame itself
-      if(!((armor_roi & cv::Rect(0, 0, width, height)) == armor_roi)) continue;
-      if(debug) cv::rectangle(src, armor_top_left, armor_bot_right, cv::Scalar(255,255,0), 2, 8, 0);  //Uncomment to see the region tested for black background
+      // if(!((armor_roi & cv::Rect(0, 0, width, height)) == armor_roi)) continue;
+
+      // Fix the roi to fit the image frame
+      armor_roi = armor_roi & cv::Rect(0, 0, width, height);
+
+      if(root_debug) cv::rectangle(src, armor_top_left, armor_bot_right, cv::Scalar(255,255,0), 2, 8, 0);  //Uncomment to see the region tested for black background
       int no_positive_pixels = cv::countNonZero(dst(armor_roi));
       if((float)no_positive_pixels/(armor_roi.height*armor_roi.width - area) > 0.95)
       { //Armor found
         sensor_msgs::RegionOfInterest obj;
-        cv::Point offset = (rect.tl() - cv::Point(rect.width, rect.height)*0.8);
-        if(offset.x < 0) offset.x = 0;
-        else if(offset.x > width) offset.x = width;
-        if(offset.y < 0) offset.y = 0;
-        else if(offset.y > height) offset.y = height;
+        cv::Point offset = armor_top_left;
+        // if(offset.x < 0) offset.x = 0;
+        // else if(offset.x > width) offset.x = width;
+        // if(offset.y < 0) offset.y = 0;
+        // else if(offset.y > height) offset.y = height;
         obj.x_offset = offset.x;
         obj.y_offset = offset.y;
-        float armor_height = rect.height*2.6;
-          obj.height = armor_height;
-        float armor_width = rect.width*2.6;
-          obj.width = armor_width;
-          obj.do_rectify = true;
+        obj.height = armor_bot_right.y - armor_top_left.y;
+        obj.width = armor_bot_right.x - armor_top_left.x;
+        obj.do_rectify = true;
 
         object.push_back(obj);  //Push the object to the vector
-        if(debug) cv::rectangle(src, offset, offset + cv::Point(armor_width, armor_height), cv::Scalar(255,0,255), 2, 8, 0);
+        if(debug) cv::rectangle(src, offset, offset + cv::Point(obj.width, obj.height), cv::Scalar(255,0,255), 2, 8, 0);
       }
     }
   }
@@ -312,37 +307,38 @@ void detect_armor_mode_2()
     double hull_area = contourArea(hull);
 
     if((std::fabs(area/mr_area - 3.141593/4) < circle_accuracy) && (std::fabs(area/hull_area - 1) < circle_accuracy) 
-        && (std::fabs((float)rect.height/rect.width - 1) < 0.2))
+        && (std::fabs((float)rect.height/rect.width - 1) < 0.35))
     { //Circle found
-      if((rect.height*2.6 > height) || (rect.width*2.6 > width)) continue;
       cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
-      if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
+      if(root_debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
       cv::Point armor_top_left = rect.tl() - cv::Point(rect.width*circle_to_checkbox_ratio, rect.height*circle_to_checkbox_ratio);
       cv::Point armor_bot_right = rect.br() + cv::Point(1,1) + cv::Point(rect.width*circle_to_checkbox_ratio, rect.height*circle_to_checkbox_ratio);
       cv::Rect armor_roi(armor_top_left, armor_bot_right);
 
       //Abort if the roi is bigger than the image frame itself
-      if(!((armor_roi & cv::Rect(0, 0, width, height)) == armor_roi)) continue;
-      if(debug) cv::rectangle(src, armor_top_left, armor_bot_right, cv::Scalar(255,255,0), 2, 8, 0);  //Uncomment to see the region tested for black background
+      // if(!((armor_roi & cv::Rect(0, 0, width, height)) == armor_roi)) continue;
+
+      // Fix the roi to fit the image frame
+      armor_roi = armor_roi & cv::Rect(0, 0, width, height);
+
+      if(root_debug) cv::rectangle(src, armor_top_left, armor_bot_right, cv::Scalar(255,255,0), 2, 8, 0);  //Uncomment to see the region tested for black background
       int no_positive_pixels = cv::countNonZero(black(armor_roi));
       if((float)no_positive_pixels/(armor_roi.height*armor_roi.width - area) > 0.95)
       { //Armor found
         sensor_msgs::RegionOfInterest obj;
-        cv::Point offset = (rect.tl() - cv::Point(rect.width, rect.height)*0.8);
-        if(offset.x < 0) offset.x = 0;
-        else if(offset.x > width) offset.x = width;
-        if(offset.y < 0) offset.y = 0;
-        else if(offset.y > height) offset.y = height;
+        cv::Point offset = armor_top_left;
+        // if(offset.x < 0) offset.x = 0;
+        // else if(offset.x > width) offset.x = width;
+        // if(offset.y < 0) offset.y = 0;
+        // else if(offset.y > height) offset.y = height;
         obj.x_offset = offset.x;
         obj.y_offset = offset.y;
-        float armor_height = rect.height*2.6;
-          obj.height = armor_height;
-        float armor_width = rect.width*2.6;
-          obj.width = armor_width;
-          obj.do_rectify = true;
+        obj.height = armor_bot_right.y - armor_top_left.y;
+        obj.width = armor_bot_right.x - armor_top_left.x;
+        obj.do_rectify = true;
 
         object.push_back(obj);  //Push the object to the vector
-        if(debug) cv::rectangle(src, offset, offset + cv::Point(armor_width, armor_height), cv::Scalar(255,0,255), 2, 8, 0);
+        if(debug) cv::rectangle(src, offset, offset + cv::Point(obj.width, obj.height), cv::Scalar(255,0,255), 2, 8, 0);
       }
     }
   }
@@ -414,6 +410,8 @@ void dynamic_configCb(base_vision::armor_colorConfig &config, uint32_t level)
 
       low_black = cv::Scalar(config.black_H_low_b, config.black_S_low_b, config.black_V_low_b);
       up_black = cv::Scalar(config.black_H_high_b, config.black_S_high_b, config.black_V_high_b);
+
+      circle_accuracy = 0.06;
     }
     else if(armor_color == "red")
     {
@@ -424,14 +422,16 @@ void dynamic_configCb(base_vision::armor_colorConfig &config, uint32_t level)
 
       low_black = cv::Scalar(config.black_H_low_r, config.black_S_low_r, config.black_V_low_r);
       up_black = cv::Scalar(config.black_H_high_r, config.black_S_high_r, config.black_V_high_r);
+
+      circle_accuracy = 0.035;
     }
   }
-  else //If mode 1
+  else //If mode 2
   {
-    low_black = cv::Scalar(config.black_low_mode1);
-    up_black = cv::Scalar(config.black_high_mode1);
-    low_white = cv::Scalar(config.white_low_mode1);
-    up_white = cv::Scalar(config.white_high_mode1);
+    low_black = cv::Scalar(config.black_low_mode2);
+    up_black = cv::Scalar(config.black_high_mode2);
+    low_white = cv::Scalar(config.white_low_mode2);
+    up_white = cv::Scalar(config.white_high_mode2);
   }
   ROS_INFO("Reconfigure Requested.");
 }

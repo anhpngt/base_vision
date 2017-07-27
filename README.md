@@ -1,4 +1,4 @@
-**New updates on 10-Jul-2017: update to improve armor detection node
+**New updates on 27-Jul-2017: color tuning update
 
 
 Detection mode and color can be adjusted in the launch file, under the [mode] and [color] argument, respectively.
