@@ -66,6 +66,25 @@ void reduce_noise(cv::Mat* dst)
   cv::morphologyEx(*dst, *dst, cv::MORPH_OPEN, str_el);
 }
 
+cv::Mat doAdaptiveThreshold()
+{
+  // Extract the S-channel of HSV to threshold
+  std::vector<cv::Mat> input_channels;
+  cv::split(hsv, input_channels);
+  cv::Mat input = input_channels[1];
+
+  int ksize = 7; // Must be odd and positive
+  cv::GaussianBlur(input, input, cv::Size(ksize, ksize), 0);
+
+  cv::Mat output;
+  int adaptiveMethod = CV_ADAPTIVE_THRESH_MEAN_C;
+  int thresholdType = CV_THRESH_BINARY;
+  int blockSize = 61; // only values of 3, 5, 7, ...
+  double C = 3;
+  cv::adaptiveThreshold(input, output, 255, adaptiveMethod, thresholdType, blockSize, C);
+  return output;
+}
+
 void armor_found(int a, int b, float LED_length)
 {
   cv::Rect recta = cv::boundingRect(contours[a]);
@@ -222,9 +241,14 @@ void detect_armor_mode_0()
 void detect_armor_mode_1()
 {
   //Filter the numbering circle (color = black)
-  cv::inRange(hsv, low_black, up_black, dst);
-  //Reduce noise, blue color only, red is fine as it is
-  if(armor_color == "blue") reduce_noise(&dst);
+  if(armor_color == "blue") 
+  {
+    cv::inRange(hsv, low_black, up_black, dst);
+    // cv::imshow("inrange", dst);
+    // cv::imshow("adt", doAdaptiveThreshold());
+    cv::bitwise_or(doAdaptiveThreshold(), dst, dst);
+  } 
+  else cv::inRange(hsv, low_black, up_black, dst);
   //Finding shapes
   cv::findContours(dst.clone(), circle_contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE);
   //Detect shape for each contour
@@ -244,7 +268,7 @@ void detect_armor_mode_1()
     double hull_area = contourArea(hull);
 
     if((std::fabs(area/mr_area - 3.141593/4) < circle_accuracy) && (std::fabs(area/hull_area - 1) < circle_accuracy) 
-        && (std::fabs((float)rect.height/rect.width - 1) < 0.35))
+        && (std::fabs((float)rect.height/rect.width - 1) < 0.4))
     { //Circle found
       cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
       if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
@@ -311,7 +335,7 @@ void detect_armor_mode_2()
     double hull_area = contourArea(hull);
 
     if((std::fabs(area/mr_area - 3.141593/4) < circle_accuracy) && (std::fabs(area/hull_area - 1) < circle_accuracy) 
-        && (std::fabs((float)rect.height/rect.width - 1) < 0.35))
+        && (std::fabs((float)rect.height/rect.width - 1) < 0.4))
     { //Circle found
       cv::Point object_center = (rect.tl() + rect.br() + cv::Point(1,1))*0.5;
       if(debug) cv::drawContours(src, circle_contours, i, cv::Scalar(0,255,255), 2);
@@ -415,7 +439,7 @@ void dynamic_configCb(base_vision::armor_colorConfig &config, uint32_t level)
       low_black = cv::Scalar(config.black_H_low_b, config.black_S_low_b, config.black_V_low_b);
       up_black = cv::Scalar(config.black_H_high_b, config.black_S_high_b, config.black_V_high_b);
 
-      circle_accuracy = 0.06;
+      circle_accuracy = 0.08;
     }
     else if(armor_color == "red")
     {
@@ -482,21 +506,21 @@ int main(int argc, char** argv)
     int org_w = 1024, org_h = 576; // (1024, 576) as original
     int win_w = org_w*0.75, win_h = org_h*0.75; // as value: (768, 432)
 
-    cv::namedWindow("src",WINDOW_NORMAL);
+    cv::namedWindow("src", WINDOW_NORMAL);
     cv::resizeWindow("src",win_w, win_h); 
     cv::moveWindow("src", 0, 0);
-    cv::namedWindow("black",WINDOW_NORMAL);
+    cv::namedWindow("black", WINDOW_NORMAL);
     cv::resizeWindow("black",win_w, win_h);
     cv::moveWindow("black", 0, 600);
     if(!detection_mode)
     {
-      cv::namedWindow("LEDs",WINDOW_NORMAL);
+      cv::namedWindow("LEDs", WINDOW_NORMAL);
       cv::resizeWindow("LEDs",win_w, win_h);
       cv::moveWindow("LEDs", 800, 0);
     }
     else if(detection_mode == 2)
     {
-      cv::namedWindow("white",WINDOW_NORMAL);
+      cv::namedWindow("white", WINDOW_NORMAL);
       cv::resizeWindow("white",win_w, win_h);
       cv::moveWindow("white", 800, 0); 
     }
