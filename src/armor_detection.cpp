@@ -485,11 +485,11 @@ int main(int argc, char** argv)
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
   pnh.getParam("subscribed_image_topic", subscribed_image_topic);
-  pnh.getParam("armor_color", armor_color); // for test here
+  // pnh.getParam("armor_color", armor_color); // for test here
   // emily changing this to setting armor_color after subscribing to the topic /color on arduino
-  // ros::param::set("armor_detection/start", 1);
-  // csub = nh.subscribe("/color", 10, colorCb);
-  // while (!pubd) ros::spinOnce();
+  ros::param::set("armor_detection/start", 1);
+  csub = nh.subscribe("/color", 10, colorCb);
+  while (!pubd) ros::spinOnce();
   pnh.getParam("mode", detection_mode);
   pnh.getParam("debug", debug);
   pnh.getParam("published_topic", published_topic);
